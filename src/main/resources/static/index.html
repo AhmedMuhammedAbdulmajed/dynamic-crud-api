@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dynamic CRUD</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #34d399;
+      --danger: #f87171;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: linear-gradient(160deg, #0f172a, #1e3a5f);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+    h1 { margin: 0 0 8px; font-size: 1.8rem; }
+    .sub { color: var(--muted); margin-bottom: 24px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .tab.active { background: var(--accent); color: #0f172a; border-color: var(--accent); font-weight: 700; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: var(--text);
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-primary { background: var(--accent); color: #0f172a; }
+    .btn-ok { background: var(--ok); color: #064e3b; }
+    .btn-danger { background: var(--danger); color: #7f1d1d; }
+    .btn-ghost { background: #334155; color: var(--text); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { text-align: right; padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
+    th { color: var(--muted); font-weight: 600; }
+    .msg { margin-top: 10px; color: var(--ok); min-height: 1.2em; }
+    .msg.error { color: var(--danger); }
+    .links a { color: var(--accent); margin-left: 12px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Dynamic CRUD</h1>
+  <p class="sub">أضف / عدّل / احذف من هنا مباشرة — بدون PowerShell</p>
+  <p class="links">
+    <a href="/swagger-ui.html" target="_blank">Swagger UI</a>
+    <a href="/h2-console" target="_blank">H2 Console</a>
+  </p>
+
+  <div class="tabs">
+    <button class="tab active" data-entity="products">Products</button>
+    <button class="tab" data-entity="customers">Customers</button>
+  </div>
+
+  <div class="panel">
+    <h3 id="form-title">إضافة / تعديل Product</h3>
+    <input type="hidden" id="edit-id" />
+
+    <div id="product-fields" class="grid">
+      <div>
+        <label>Name</label>
+        <input id="p-name" placeholder="Laptop" />
+      </div>
+      <div>
+        <label>Description</label>
+        <input id="p-description" placeholder="15-inch" />
+      </div>
+      <div>
+        <label>Price</label>
+        <input id="p-price" type="number" step="0.01" placeholder="999.99" />
+      </div>
+      <div>
+        <label>Quantity</label>
+        <input id="p-quantity" type="number" placeholder="10" />
+      </div>
+    </div>
+
+    <div id="customer-fields" class="grid hidden">
+      <div>
+        <label>Name</label>
+        <input id="c-name" placeholder="Ahmed Ali" />
+      </div>
+      <div>
+        <label>Email</label>
+        <input id="c-email" type="email" placeholder="ahmed@example.com" />
+      </div>
+      <div>
+        <label>Phone</label>
+        <input id="c-phone" placeholder="01012345678" />
+      </div>
+      <div>
+        <label>Address</label>
+        <input id="c-address" placeholder="Cairo" />
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" onclick="save()">حفظ</button>
+      <button class="btn-ghost" onclick="resetForm()">تفريغ</button>
+      <button class="btn-ok" onclick="loadAll()">تحديث القائمة</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <div class="panel">
+    <h3>البيانات</h3>
+    <div style="overflow-x:auto">
+      <table>
+        <thead id="thead"></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let entity = "products";
+
+    document.querySelectorAll(".tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        entity = btn.dataset.entity;
+        document.getElementById("form-title").textContent =
+          entity === "products" ? "إضافة / تعديل Product" : "إضافة / تعديل Customer";
+        document.getElementById("product-fields").classList.toggle("hidden", entity !== "products");
+        document.getElementById("customer-fields").classList.toggle("hidden", entity !== "customers");
+        resetForm();
+        loadAll();
+      });
+    });
+
+    function showMsg(text, isError = false) {
+      const el = document.getElementById("msg");
+      el.textContent = text;
+      el.className = "msg" + (isError ? " error" : "");
+    }
+
+    function resetForm() {
+      document.getElementById("edit-id").value = "";
+      ["p-name","p-description","p-price","p-quantity","c-name","c-email","c-phone","c-address"]
+        .forEach(id => document.getElementById(id).value = "");
+    }
+
+    function getBody() {
+      if (entity === "products") {
+        return {
+          name: document.getElementById("p-name").value,
+          description: document.getElementById("p-description").value,
+          price: Number(document.getElementById("p-price").value),
+          quantity: Number(document.getElementById("p-quantity").value)
+        };
+      }
+      return {
+        name: document.getElementById("c-name").value,
+        email: document.getElementById("c-email").value,
+        phone: document.getElementById("c-phone").value,
+        address: document.getElementById("c-address").value
+      };
+    }
+
+    async function save() {
+      const id = document.getElementById("edit-id").value;
+      const body = getBody();
+      const url = id ? `/api/${entity}/${id}` : `/api/${entity}`;
+      const method = id ? "PUT" : "POST";
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || res.statusText);
+        }
+        showMsg(id ? "تم التعديل بنجاح" : "تم الإضافة بنجاح");
+        resetForm();
+        loadAll();
+      } catch (e) {
+        showMsg(e.message, true);
+      }
+    }
+
+    function fillForm(row) {
+      document.getElementById("edit-id").value = row.id;
+      if (entity === "products") {
+        document.getElementById("p-name").value = row.name || "";
+        document.getElementById("p-description").value = row.description || "";
+        document.getElementById("p-price").value = row.price ?? "";
+        document.getElementById("p-quantity").value = row.quantity ?? "";
+      } else {
+        document.getElementById("c-name").value = row.name || "";
+        document.getElementById("c-email").value = row.email || "";
+        document.getElementById("c-phone").value = row.phone || "";
+        document.getElementById("c-address").value = row.address || "";
+      }
+      showMsg("عدّل القيم ثم اضغط حفظ");
+    }
+
+    async function removeRow(id) {
+      if (!confirm("هل تريد الحذف؟")) return;
+      try {
+        const res = await fetch(`/api/${entity}/${id}`, { method: "DELETE" });
+        if (!res.ok && res.status !== 204) throw new Error("فشل الحذف");
+        showMsg("تم الحذف");
+        loadAll();
+      } catch (e) {
+        showMsg(e.message, true);
+      }
+    }
+
+    async function loadAll() {
+      try {
+        const res = await fetch(`/api/${entity}`);
+        const data = await res.json();
+        const thead = document.getElementById("thead");
+        const tbody = document.getElementById("tbody");
+
+        if (entity === "products") {
+          thead.innerHTML = "<tr><th>ID</th><th>Name</th><th>Description</th><th>Price</th><th>Quantity</th><th>Actions</th></tr>";
+          tbody.innerHTML = data.map(r => `
+            <tr>
+              <td>${r.id}</td><td>${r.name || ""}</td><td>${r.description || ""}</td>
+              <td>${r.price ?? ""}</td><td>${r.quantity ?? ""}</td>
+              <td>
+                <button class="btn-ghost" onclick='fillForm(${JSON.stringify(r)})'>تعديل</button>
+                <button class="btn-danger" onclick="removeRow(${r.id})">حذف</button>
+              </td>
+            </tr>`).join("") || "<tr><td colspan='6'>لا توجد بيانات</td></tr>";
+        } else {
+          thead.innerHTML = "<tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th>Actions</th></tr>";
+          tbody.innerHTML = data.map(r => `
+            <tr>
+              <td>${r.id}</td><td>${r.name || ""}</td><td>${r.email || ""}</td>
+              <td>${r.phone || ""}</td><td>${r.address || ""}</td>
+              <td>
+                <button class="btn-ghost" onclick='fillForm(${JSON.stringify(r)})'>تعديل</button>
+                <button class="btn-danger" onclick="removeRow(${r.id})">حذف</button>
+              </td>
+            </tr>`).join("") || "<tr><td colspan='6'>لا توجد بيانات</td></tr>";
+        }
+      } catch (e) {
+        showMsg(e.message, true);
+      }
+    }
+
+    loadAll();
+  </script>
+</body>
+</html>
